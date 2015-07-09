@@ -36,14 +36,15 @@ public final class SocketEngine: NSObject, WebSocketDelegate, SocketLogClient {
 
     private var closed = false
     private var _connected = false
+    private var extraHeaders:[String: String]?
     private var fastUpgrade = false
     private var forcePolling = false
     private var forceWebsockets = false
-    private var pingInterval:Int?
+    private var pingInterval:Double?
     private var pingTimer:NSTimer?
-    private var pingTimeout = 0 {
+    private var pingTimeout = 0.0 {
         didSet {
-            pongsMissedMax = pingTimeout / (pingInterval ?? 25)
+            pongsMissedMax = Int(pingTimeout / (pingInterval ?? 25))
         }
     }
     private var pongsMissed = 0
@@ -108,6 +109,7 @@ public final class SocketEngine: NSObject, WebSocketDelegate, SocketLogClient {
         cookies = opts?["cookies"] as? [NSHTTPCookie]
         log = opts?["log"] as? Bool ?? false
         socketPath = opts?["path"] as? String ?? ""
+        extraHeaders = opts?["extraHeaders"] as? [String: String]
     }
 
     deinit {
@@ -192,6 +194,13 @@ public final class SocketEngine: NSObject, WebSocketDelegate, SocketLogClient {
     private func createWebsocket(andConnect connect:Bool) {
         ws = WebSocket(url: NSURL(string: urlWebSocket! + "&sid=\(sid)")!,
             cookies: cookies)
+
+        if extraHeaders != nil {
+            for (headerName, value) in extraHeaders! {
+                ws?.headers[headerName] = value
+            }
+        }
+
         ws?.queue = handleQueue
         ws?.delegate = self
 
@@ -225,6 +234,12 @@ public final class SocketEngine: NSObject, WebSocketDelegate, SocketLogClient {
         if cookies != nil {
             let headers = NSHTTPCookie.requestHeaderFieldsWithCookies(cookies!)
             req.allHTTPHeaderFields = headers
+        }
+
+        if extraHeaders != nil {
+            for (headerName, value) in extraHeaders! {
+                req.setValue(value, forHTTPHeaderField: headerName)
+            }
         }
 
         doRequest(req)
@@ -402,9 +417,9 @@ public final class SocketEngine: NSObject, WebSocketDelegate, SocketLogClient {
                     createWebsocket(andConnect: true)
                 }
 
-                if let pingInterval = json["pingInterval"] as? Int, pingTimeout = json["pingTimeout"] as? Int {
-                    self.pingInterval = pingInterval / 1000
-                    self.pingTimeout = pingTimeout / 1000
+                if let pingInterval = json["pingInterval"] as? Double, pingTimeout = json["pingTimeout"] as? Double {
+                    self.pingInterval = pingInterval / 1000.0
+                    self.pingTimeout = pingTimeout / 1000.0
                 }
         } else {
             client?.didError("Engine failed to handshake")
@@ -473,6 +488,12 @@ public final class SocketEngine: NSObject, WebSocketDelegate, SocketLogClient {
         if cookies != nil {
             let headers = NSHTTPCookie.requestHeaderFieldsWithCookies(cookies!)
             reqPolling.allHTTPHeaderFields = headers
+        }
+
+        if extraHeaders != nil {
+            for (headerName, value) in extraHeaders! {
+                reqPolling.setValue(value, forHTTPHeaderField: headerName)
+            }
         }
 
         doRequest(reqPolling)
@@ -648,8 +669,7 @@ public final class SocketEngine: NSObject, WebSocketDelegate, SocketLogClient {
         pingTimer?.invalidate()
         dispatch_async(dispatch_get_main_queue()) {[weak self] in
             if let this = self {
-                this.pingTimer = NSTimer.scheduledTimerWithTimeInterval(NSTimeInterval(this.pingInterval!),
-                    target: this,
+                this.pingTimer = NSTimer.scheduledTimerWithTimeInterval(this.pingInterval!, target: this,
                     selector: Selector("sendPing"), userInfo: nil, repeats: true)
             }
         }
