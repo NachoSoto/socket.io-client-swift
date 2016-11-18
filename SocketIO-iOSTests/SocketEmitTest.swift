@@ -15,12 +15,12 @@ class SocketEmitTest: AbstractSocketTest {
         testKind = TestKind.Emit
         if AbstractSocketTest.socket == nil {
             AbstractSocketTest.socket = SocketIOClient(socketURL: AbstractSocketTest.serverURL, opts: [
-                "reconnects": true, // default true
-                "reconnectAttempts": -1, // default -1
-                "reconnectWait": 5, // default 10
-                "forcePolling": false,
-                "forceWebsockets": false,// default false
-                "path": ""]
+                "reconnects": true as AnyObject, // default true
+                "reconnectAttempts": -1 as AnyObject, // default -1
+                "reconnectWait": 5 as AnyObject, // default 10
+                "forcePolling": false as AnyObject,
+                "forceWebsockets": false as AnyObject,// default false
+                "path": "" as AnyObject]
             )
             openConnection()
         }else {

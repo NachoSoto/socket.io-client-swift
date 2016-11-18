@@ -11,17 +11,22 @@ import XCTest
 class SocketParserTest: XCTestCase {
     
     //Format key: message; namespace-data-binary-id
-    static let packetTypes: Dictionary<String, (String, [AnyObject], [NSData], Int)> = [
+    static let packetTypes: [String: (String, [Any], [Data], Int)] = [
         "0": ("/", [], [], -1), "1": ("/", [], [], -1),
-        "2/swift,[\"testArrayEmitReturn\",[\"test3\",\"test4\"]]": ("/swift", ["testArrayEmitReturn", ["test3", "test4"]], [], -1),
-        "51-/swift,[\"testMultipleItemsWithBufferEmitReturn\",[1,2],{\"test\":\"bob\"},25,\"polo\",{\"_placeholder\":true,\"num\":0}]": ("/swift", ["testMultipleItemsWithBufferEmitReturn", [1, 2], ["test": "bob"], 25, "polo", "~~0"], [], -1),
-        "3/swift,0[[\"test3\",\"test4\"]]": ("/swift", [["test3", "test4"]], [], 0),
-        "61-/swift,19[[1,2],{\"test\":\"bob\"},25,\"polo\",{\"_placeholder\":true,\"num\":0}]": ("/swift", [ [1, 2], ["test": "bob"], 25, "polo", "~~0"], [], 19),
+        "25[\"test\"]": ("/", ["test"], [], 5),
+        "2[\"test\",\"~~0\"]": ("/", ["test", "~~0"], [], -1),
+        "2/swift,[\"testArrayEmitReturn\",[\"test3\",\"test4\"]]": ("/swift", ["testArrayEmitReturn", ["test3", "test4"] as NSArray], [], -1),
+        "51-/swift,[\"testMultipleItemsWithBufferEmitReturn\",[1,2],{\"test\":\"bob\"},25,\"polo\",{\"_placeholder\":true,\"num\":0}]": ("/swift", ["testMultipleItemsWithBufferEmitReturn", [1, 2] as NSArray, ["test": "bob"] as NSDictionary, 25, "polo", ["_placeholder": true, "num": 0] as NSDictionary], [], -1),
+        "3/swift,0[[\"test3\",\"test4\"]]": ("/swift", [["test3", "test4"] as NSArray], [], 0),
+        "61-/swift,19[[1,2],{\"test\":\"bob\"},25,\"polo\",{\"_placeholder\":true,\"num\":0}]":
+            ("/swift", [ [1, 2] as NSArray, ["test": "bob"] as NSDictionary, 25, "polo", ["_placeholder": true, "num": 0] as NSDictionary], [], 19),
         "4/swift,": ("/swift", [], [], -1),
         "0/swift": ("/swift", [], [], -1),
         "1/swift": ("/swift", [], [], -1),
         "4\"ERROR\"": ("/", ["ERROR"], [], -1),
-        "41": ("/", [1], [], -1)]
+        "4{\"test\":2}": ("/", [["test": 2]], [], -1),
+        "41": ("/", [1], [], -1),
+        "4[1, \"hello\"]": ("/", [1, "hello"], [], -1)]
     
     func testDisconnect() {
         let message = "1"
@@ -81,9 +86,9 @@ class SocketParserTest: XCTestCase {
     func testInvalidInput() {
         let message = "8"
         switch SocketParser.parseString(message) {
-        case .Left(_):
+        case .left(_):
             return
-        case .Right(_):
+        case .right(_):
             XCTFail("Created packet when shouldn't have")
         }
     }
@@ -96,15 +101,15 @@ class SocketParserTest: XCTestCase {
         XCTAssertEqual(parser.currentCharacter, "/")
     }
     
-    func validateParseResult(message: String) {
+    func validateParseResult(_ message: String) {
         let validValues = SocketParserTest.packetTypes[message]!
         let packet = SocketParser.parseString(message)
-        let type = message.substringWithRange(Range<String.Index>(start: message.startIndex, end: message.startIndex.advancedBy(1)))
-        if case let .Right(packet) = packet {
+        let type = message.substring(with: (message.startIndex ..< message.characters.index(message.startIndex, offsetBy: 1)))
+        if case let .right(packet) = packet {
             XCTAssertEqual(packet.type, SocketPacket.PacketType(str:type)!)
             XCTAssertEqual(packet.nsp, validValues.0)
-            XCTAssertTrue((packet.data as NSArray).isEqualToArray(validValues.1))
-            XCTAssertTrue((packet.binary as NSArray).isEqualToArray(validValues.2))
+            XCTAssertTrue((packet.data as NSArray).isEqual(to: validValues.1))
+            XCTAssertTrue((packet.binary as NSArray).isEqual(to: validValues.2))
             XCTAssertEqual(packet.id, validValues.3)
         } else {
             XCTFail()
@@ -113,9 +118,9 @@ class SocketParserTest: XCTestCase {
     
     func testParsePerformance() {
         let keys = Array(SocketParserTest.packetTypes.keys)
-        measureBlock({
-            for item in keys.enumerate() {
-                SocketParser.parseString(item.element)
+        measure({
+            for item in keys.enumerated() {
+                _ = SocketParser.parseString(item.element)
             }
         })
     }
